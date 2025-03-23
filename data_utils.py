@@ -56,15 +56,14 @@ def get_freq(data: Dict[str, DataInfo], sex: Literal['male', 'female'] = 'male',
         datum = (datum_total - datum_aga * aga_rate) / (1-aga_rate)
     else:
         raise ValueError("sex must be either 'male' or 'female'")
-    datum = datum / 100
+
     return datum
 
 def get_expected_profit(
     N: int = 100,
-    age_comp_rate: pd.Series = None,  # Series に変更
-    freq: pd.Series = None,           # Series に変更
-    data: Dict[str, pd.DataFrame] = None,
-    sex: Literal['male', 'female'] = 'male'
+    age_comp_rate: pd.Series = None,
+    freq: pd.Series = None,
+    data: Dict[str, pd.DataFrame] = None
 ) -> float:
     # データ範囲の選定と百分率化
     selected_data = data.df.iloc[:5, 1:7] / 100
@@ -85,6 +84,23 @@ def get_expected_profit(
     profit = profit_matrix.sum().sum()
     return profit
 
+# 1年間に一人の顧客が落とす散髪代金の期待値
+def get_expected_basic_profit(
+    age_comp_rate: pd.Series = None,
+    aga_rate: pd.Series = None,
+    freq_normal: pd.Series = None,
+    freq_aga: pd.Series = None
+) -> float:
+    # 各年代構成比＊各年代の利用頻度(aga+normal)*美容院にかける平均金額
+    ave_fee = pd.Series([4877, 4844, 4697, 4871, 4145], index=["20代", "30代", "40代", "50代", "60代"])
+    ave_freq=  aga_rate * (freq_aga - freq_normal) + freq_normal
+    expected_basic_profit_series = age_comp_rate * ave_freq * ave_fee
+    print(expected_basic_profit_series)
+    expected_basic_profit = expected_basic_profit_series.sum()
+    return expected_basic_profit
 
+def get_age_comp_rate() -> pd.Series:
+    age_comp_rate = pd.Series([0.25, 0.30, 0.25, 0.15, 0.05], index=["20代", "30代", "40代", "50代", "60代"])
+    return age_comp_rate
 
 # \sum (basic_profit:散髪代金 + optional_profit：頭髪診断やパーマ、その他オプション代金) * ferq:来室頻度

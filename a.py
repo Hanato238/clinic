@@ -2,14 +2,21 @@ import sys
 sys.path.append("C:\\Users\\lesen\\workspace\\clinic")
 
 
-from data_utils import data_loader, get_aga_rate, get_freq, get_expected_profit
+import new_utils
 
 file_path = 'data.xlsx'
-data = data_loader(file_path)
-freq = get_freq(data)
-aga = get_aga_rate(data)
-datum = data['Q8S1_薄毛対策へかけている金額_薄毛_男性']
-profit = get_expected_profit(data, freq, aga, datum)
+data = new_utils.DataContainer().load(file_path)
+print(data.get_aga_rate())
+optionals = ['パーマ', 'ヘッドスパ', '商品購入', '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
+optinal_profit_matrixes= {}
+for optional in optionals:
+    matrix = data.get_expected_optional_profit_matrix(optional)
+    optinal_profit_matrixes[optional] = matrix
+    print(matrix.keys)
 
-for name in data:
-    print(name)
+
+# 年代構成比の変化による収益
+
+
+# 年代別薄毛率の変化による収益
+## 寄与度を調べて最小値～最大値を求めよう！
