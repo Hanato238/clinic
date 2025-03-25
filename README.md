@@ -14,6 +14,10 @@ r_3 = []
 r_4 = []
 r_5 = []
 
+[計算理論]
+prof_total_pre = \sum (basic_prof * freq_ave_pre + optinal_prof * freq_aga_pre)
+prof_total_post = \sum (basic_prof * freq_ave_post + optinal_prof * freq_aga_post)
+
 [シート名一覧]
 Q11_理美容院への相談経験_薄毛_女性
 Q11_理美容院への相談経験_薄毛_男性

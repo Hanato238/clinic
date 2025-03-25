@@ -3,20 +3,30 @@ sys.path.append("C:\\Users\\lesen\\workspace\\clinic")
 
 from dataclasses import dataclass
 import pandas as pd
-from typing import Dict, Literal, Optional
+from typing import Dict, Literal, Optional, Union, List
 
 @dataclass
 class DataInfo:
     name: str
     df: pd.DataFrame
 
+OptionalItem = Literal['パーマ', 'ヘッドスパ', '商品購入', '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
+OptinalSatisfaction = Literal['薄毛専門サロン', 'クリニック', 'パーマ', 'ヘッドスパ', '市販薬', '育毛エッセンス',
+                      '薄毛対策シャンプー', 'セルフマッサージ', '機械マッサージ', 'サプリメント', '生活習慣']
+
 ## 男女でDataContainer分けてもいいかも：filterメソッドを作成しました
 class DataContainer:
     def __init__(self, data: Optional[Dict[str, DataInfo]] = None):
         self.data: Dict[str, DataInfo] = data if data else {}
 
+    def load_data(self, file_path: str, sex: Literal['male', 'female'] = 'male') -> 'DataContainer':
+        self.file_path = file_path
+        self.sex = sex
+
+        return self._loader(self.file_path)._filter_by_sex(self.sex)
+
     # loader
-    def load(self, file_path: str, sex: Literal['male', 'female'] = 'male') -> 'DataContainer':
+    def _loader(self, file_path: str) -> 'DataContainer':
         """Excelファイルからデータを読み込んで DataInfo に変換"""
         sheets: Dict[str, pd.DataFrame] = pd.read_excel(file_path, sheet_name=None)
 
@@ -38,7 +48,7 @@ class DataContainer:
         self.data = sheet_info_dict
         return self
 
-    def filer_by_sex(self, sex: Literal['male', 'female'] = 'male') -> 'DataContainer':
+    def _filter_by_sex(self, sex: Literal['male', 'female'] = 'male') -> 'DataContainer':
         if sex == 'male':
             label = '_男性'
         elif sex == 'female':
@@ -82,21 +92,30 @@ class DataContainer:
 
         return datum
 
+    # 1回あたりの美容院利用費用のデータ追加
+    def get_ave_fee(self):
+        if self.sex == 'male':
+            ave_fee = pd.Series([4877, 4844, 4697, 4871, 4145], index=["20代", "30代", "40代", "50代", "60代"])
+        elif self.sex == 'female':
+            ave_fee = pd.Series([4877, 4844, 4697, 4871, 4145], index=["20代", "30代", "40代", "50代", "60代"])     
+        return ave_fee
+               
 # \sum (basic_profit:散髪代金 + optional_profit：頭髪診断やパーマ、その他オプション代金) * ferq:来室頻度
+# prof_total_pre = \sum (basic_prof * freq_ave_pre + optinal_prof * freq_aga_pre)
+# prof_total_post = \sum (basic_prof * freq_ave_post + optinal_prof * freq_aga_post)
+
 
     # 1年間に各年代の一人の顧客が落とす散髪代金の期待値行列:basic_profit_series
     def get_expected_basic_profit_series(
         self,
-        aga_rate: pd.Series = None,
-        sex: Literal['male', 'female'] = 'male'
+        aga_rate: pd.Series = None
     ) -> float:
         # 各年代構成比＊各年代の利用頻度(aga+normal)*美容院にかける平均金額
-        # 美容センサスによる男性の美容院にかける1回あたりの平均金額
-        ave_fee = pd.Series([4877, 4844, 4697, 4871, 4145], index=["20代", "30代", "40代", "50代", "60代"])
 
-        # aga/normalの利用頻度の取得
+        # aga/normalの利用頻度と美容院平均利用金額の取得
         freq_normal = self.get_freq(type='normal')
         freq_aga = self.get_freq(type='aga')
+        ave_fee = self.get_ave_fee()
 
         # aga罹患率の取得。代入されていれば不要
         if self.aga_rate is None:
@@ -178,4 +197,33 @@ class DataContainer:
             raise ValueError('optinal service is not existed')
 
         selected_data = self.data[label].df['効果実感あり計']
-        print(selected_data)
+        return selected_data
+
+
+    def get_optional_profit_matrix(
+            self,
+            items: Union[OptionalItem, List[OptionalItem]] = ['パーマ', 'ヘッドスパ', '商品購入', 
+                                                              '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
+        ) -> pd.DataFrame:
+        if isinstance(items, str):
+            items = [items]
+
+        matrixes = {}
+        for item in items:
+            matrix = self.data.get_expected_optional_profit_series(item)
+            matrixes[item] = matrix
+        return pd.DataFrame(matrixes)
+
+    def get_service_satisfaction_matrix(
+            self, 
+            items: Union[OptinalSatisfaction, List[OptinalSatisfaction]] = ['薄毛専門サロン', 'クリニック', 'パーマ', 'ヘッドスパ', '市販薬', '育毛エッセンス',
+                      '薄毛対策シャンプー', 'セルフマッサージ', '機械マッサージ', 'サプリメント', '生活習慣']
+        ) -> pd.DataFrame:
+        if isinstance(items, str):
+            items = [items]
+
+        matrixes = {}
+        for item in items:
+            matrix = self.data.get_service_satisfaction_series(item)
+            matrixes[item] = matrix
+        return pd.DataFrame(matrixes).T
