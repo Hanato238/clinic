@@ -9,11 +9,28 @@ plt.rcParams['font.family'] = 'Yu Gothic'
 file_path = 'data.xlsx'
 
 analyzer = data_apps.AGADataAnalyzer(file_path)
-analyzer.show_aga_rate()
+age_comp = analyzer.data.get_age_comp()
+print(f"年代構成比: {age_comp}")
+print(age_comp.sum())
+#analyzer.show_aga_rate()
 
+# ベース収益の期待値
+basic_profit = analyzer.calc_expected_basic_profit()
+print(f"ベース収益の期待値: {basic_profit}")
+
+
+# optionサービスの収益期待値
+# optional itemの提示
 optional_items = ['パーマ', 'ヘッドスパ', '商品購入', '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
-df_profit = analyzer.get_optional_profit_matrix(optional_items)
-analyzer.plot_bar_chart(df_profit, "年代別 期待収益比較", "期待収益（円）")
+optional_profit_dict = analyzer.calc_expected_optional_profit_dict()
+
+for item in optional_items:
+    print(f"{item}: {optional_profit_dict[item]}")
+
+
+
+
+
 
 # 効果実感の分析とグラフ
 satisfaction_items = ['薄毛専門サロン', 'クリニック', 'パーマ', 'ヘッドスパ', '市販薬', '育毛エッセンス',
