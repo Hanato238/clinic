@@ -9,9 +9,8 @@ plt.rcParams['font.family'] = 'Yu Gothic'
 file_path = 'data.xlsx'
 
 analyzer = data_apps.AGADataAnalyzer(file_path)
-age_comp = analyzer.data.get_age_comp()
-print(f"年代構成比: {age_comp}")
-print(age_comp.sum())
+analyzer.analyze_optional_profit()
+
 #analyzer.show_aga_rate()
 
 # ベース収益の期待値

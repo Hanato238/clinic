@@ -1,7 +1,6 @@
 import sys
 sys.path.append("C:\\Users\\lesen\\workspace\\clinic")
 
-from age_comp_utils import AgeCompUtils
 from dataclasses import dataclass
 import pandas as pd
 from typing import Dict, Literal, Optional, Union, List
@@ -86,25 +85,11 @@ class DataContainer:
         return utility_rate
 
     # 実際のaga罹患率の取得：pd.Series
-    def get_aga_rate(self) -> pd.Series:
+    def _get_aga_rate(self) -> pd.Series:
         datum = self.data['SQ01_気になること'].df['薄毛である']
         datum = datum / 100
         return datum
     
-    # 実際の理美容院利用者の年齢階級別構成比の取得：pd.Series
-    def get_age_comp(self, pref:str = None) -> pd.Series:
-        age_comp_utils = AgeCompUtils(self.sex)
-        if pref is not None:
-            age_comp_utils = age_comp_utils.get_local_age_comp(pref)
-        # 年齢階級別構成比
-        real_age_comp = age_comp_utils.age_comp
-        # ここにe-stat apiを用いて市町村別年齢階級別構成比を取得
-        utility_rate = self._get_utility_rate()
-        age_comp = real_age_comp * utility_rate
-        age_comp = pd.Series(age_comp, index=utility_rate.index)
-        age_comp = age_comp / age_comp.sum()
-        return age_comp
-
     # 理美容室利用頻度の取得：Dict[str, pd.Series]
     def get_freq_dict(self) -> Dict[str, pd.Series]:
         data = {}
@@ -113,17 +98,13 @@ class DataContainer:
         data['aga'] = datum_aga
         # 非aga患者の利用頻度
         datum_total = self.data['SQ10_理美容室利用頻度'].df['年加重平均']
-        aga_rate = self.get_aga_rate()
+        aga_rate = self._get_aga_rate()
         datum_normal = (datum_total - datum_aga * aga_rate) / (1-aga_rate)
         data['normal'] = datum_normal
         return data
 
-               
-# \sum (basic_profit:散髪代金 + optional_profit：頭髪診断やパーマ、その他オプション代金) * ferq:来室頻度
-# prof_total_pre = \sum (basic_prof * freq_ave_pre + optinal_prof * freq_aga_pre * 利用率)
-# prof_total_post = \sum (basic_prof * freq_ave_post + optinal_prof * freq_aga_post * 利用率)
 
-
+#-----------顧客一人当たりの年間期待利益の算出のためのデータ
     # 1年間に各年代の一人の顧客が落とす散髪代金の期待値行列：Dict[pd.Series]
     def get_basic_profit_dict(
         self
@@ -144,50 +125,19 @@ class DataContainer:
         dict['normal'] = normal_basic_profit_series
 
         return dict
-    
-    
+   
     # AGA患者一人当たりの各サービスの年間期待利益行列の取得:pd.Series
-    def _get_optional_profit_series(
+    def get_optional_service_data(
         self,
-        optional_service: Literal['パーマ', 'ヘッドスパ', '商品購入', '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
+        label: str,
     ) -> pd.Series:
         
-        # オプションサービスのラベル生成
-        if optional_service == 'パーマ':
-            label = 'Q21S01_理美容院でかけてよい金額(自発ベース)_ボリュームアップパーマ_薄毛'
-        elif optional_service == 'ヘッドスパ':
-            label = 'Q21S02_理美容院でかけてよい金額(自発ベース)_ヘッドスパマッサージ_薄毛'
-        elif optional_service == '商品購入':
-            label = 'Q21S03_理美容院でかけてよい金額(自発ベース)_商品購入_薄毛'
-        elif optional_service == '頭髪診断':
-            label = 'Q21S04_理美容院でかけてよい金額(自発ベース)_頭髪診断_薄毛'
-        elif optional_service == '薄毛対策(現在)':
-            label = 'Q08S01_薄毛対策へかけている金額_薄毛'
-        elif optional_service == '薄毛対策(上限)':
-            label = 'Q08S02_薄毛対策へかけてもよい金額_薄毛'
-        else:
-            raise ValueError('optinal service is not existed')
-
         # データ範囲の選定と百分率化
         selected_data = self.data[label].df.iloc[:5, 1:7] / 100
-
-        # サービス単価（例：年齢層ごとに設定、6カテゴリ）
-        if label.startswith('Q21'):
-            fee_matrix = [2000, 3000, 4000, 5000, 10000, 10000]
-        elif label.startswith('Q08'):
-            fee_matrix = [1000, 2000, 3000, 5000, 10000, 15000]
-        else:
-            raise ValueError("label must start with 'Q21' or 'Q08'")
-
-        # Series化（列方向と整合するように転置しておく）
-        fee_series = pd.Series(fee_matrix, index=selected_data.columns).T
-
-        # 年間期待利益の計算：pd.Series
-        optional_profit_series = selected_data.mul(fee_series, axis=1).sum(axis=0, skipna=True)
-        return optional_profit_series
+        return selected_data
     
-    # 各サービス満足度の取得
-    def _get_service_satisfaction_series(
+    # 各サービス満足度の取得：pd.Series
+    def get_service_satisfaction_series(
             self, 
             optional_service: Literal['薄毛専門サロン', 'クリニック', 'パーマ', 'ヘッドスパ', '市販薬', '育毛エッセンス', '薄毛対策シャンプー', 'セルフマッサージ', '機械マッサージ', 'サプリメント', '生活習慣']
     ) -> pd.Series:
@@ -220,30 +170,59 @@ class DataContainer:
         return selected_data
 
 
-    def get_optional_profit_dict(
+# 顧客分布クラス
+class CustomerDist:
+    def __init__(
             self,
-            items: Union[OptionalItem, List[OptionalItem]] = ['パーマ', 'ヘッドスパ', '商品購入', 
-                                                              '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
-        ) -> Dict[str, pd.Series]:
-        if isinstance(items, str):
-            items = [items]
+            age_comp: pd.Series = None,
+            aga_rate: pd.Series = None,
+            sex:str = 'male',
+            ):
+        self.sex = sex
+        self.age_comp = age_comp
+        self.aga_rate = aga_rate
 
-        dict = {}
-        for item in items:
-            data = self._get_optional_profit_series(item)
-            dict[item] = data
-        return dict
+    def get_normal_dist(self, data:DataContainer) :
+        self._get_normal_age_comp()
+        self._get_aga_rate(data)
+        return self
 
-    def get_service_satisfaction_dict(
-            self, 
-            items: Union[OptinalSatisfaction, List[OptinalSatisfaction]] = ['薄毛専門サロン', 'クリニック', 'パーマ', 'ヘッドスパ', '市販薬', '育毛エッセンス',
-                      '薄毛対策シャンプー', 'セルフマッサージ', '機械マッサージ', 'サプリメント', '生活習慣']
-        ) -> Dict[str, pd.Series]:
-        if isinstance(items, str):
-            items = [items]
+    def _get_normal_age_comp(self):
+        if self.sex == 'male':
+            data = {
+                '20代': 6082,
+                '30代': 6857,
+                '40代': 9067,
+                '50代': 8197,
+                '60代': 7624
+            }
+        elif self.sex == 'female':
+            data = {
+                '20代': 5775,
+                '30代': 6625,
+                '40代': 8801,
+                '50代': 8102,
+                '60代': 7955
+            }
+        else:
+            raise ValueError('sex is not true')
+        series = pd.Series(data)
+        series = series / series.sum()
+        self.age_comp = series
+        return
+    
+    def _get_aga_rate(self, data:DataContainer) -> pd.Series:
+        self.aga_rate = data._get_aga_rate
+        return
+    
 
-        dict = {}
-        for item in items:
-            data = self.data._get_service_satisfaction_series(item)
-            dict[item] = data
-        return dict
+class EstimateCustomers:
+    def _init_(self, customers:CustomerDist) -> CustomerDist:
+        self.former_customers = customers
+    
+    def get_future_customers(self, current_customers:dict[str, pd.Series]) -> dict[str, pd.Series]:
+        return future_customers
+    
+    def get_potential_customers(self) -> dict[str, pd.Series]:
+        senario = []
+        # current_customers * = potential_customers
