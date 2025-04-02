@@ -3,7 +3,7 @@ sys.path.append("C:\\Users\\lesen\\workspace\\clinic")
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from data_utils import DataContainer, CustomerDist, EstimateCustomers
+from data_utils import DataContainer, CustomerDist
 from typing import Union, List, Literal, Optional, Callable
 plt.rcParams['font.family'] = 'Yu Gothic'
 
@@ -16,87 +16,99 @@ class AGADataAnalyzer:
             ):
         self.data = DataContainer().load_data(file_path, sex)
         # 解析対象となる高階関数の作成
-        calculator = DataCalculator(self.data)
-        self.calc_expected_basic_profit: Callable[[pd.Series, pd.Series], float] = calculator.calc_expected_basic_profit
-        self.calc_expected_optional_profit: Callable[[pd.Series, pd.Series, pd.Series], dict[str, float]] = calculator.calc_expected_optional_profit
-        self.customer = CustomerDist().get_normal_dist(self.data)
+        self.calculator = DataCalculator(self.data)
+        self.calc_expected_basic_profit: Callable[[pd.Series, pd.Series], float] = self.calculator.calc_expected_basic_profit
+        self.calc_expected_optional_profit: Callable[[pd.Series, pd.Series, pd.Series], dict[str, float]] = self.calculator.calc_expected_optional_profit
 
         print(f"Load completed for sex: {sex}")
 
     def analyze_basic_profit(self) -> None:
+        excepted_basic_profit = self.calc_expected_basic_profit()
         # 解析したい式self.calc_expected_basic_profit: Callable[[pd.Series, pd.Series], float] = calculator.calc_expected_basic_profitは線形式
         # 解析される式の変数はaga_rate, age_compでいずれも大きさ5のpd.Series
         # 
-        return
+        return excepted_basic_profit
     
     def analyze_optional_profit(self) -> None:
         fee_list = [1000, 1500, 2000, 2500, 3000, 5000]
         dict = {}
         for fee in fee_list:
-            optional_profit = self.calc_expected_optional_profit(self.customer, '頭髪診断', fee)
+            optional_profit = self.calc_expected_optional_profit('頭髪診断', fee)
             dict[fee] = optional_profit
-        df = pd.DataFrame(dict, orient='index', columns=['頭髪診断'])
+        df = pd.DataFrame.from_dict(dict, orient='index', columns=['頭髪診断'])
         df.index.name = '価格'
+        print(df)
         df.plot(title='頭髪診断の価格による収益期待値', ylabel='収益期待値', xlabel='価格', figsize=(8, 5), kind='bar')
         plt.show()
         # self.calc_expected_optional_profit: Callable[[pd.Series, pd.Series, pd.Series], dict[str, float]] = calculator.calc_expected_optional_profit_dictは線形式
         # 解析される式の変数はaga_rate, age_comp, utility_rateでいずれも大きさ5のpd.Series
         #
         return
-    
-    def show_aga_rate(self):
-        print("AGA Rate:", self.aga_rate)
+
+### コスト等を追加
+    def analyze_clinic_profit(self) -> None:
+        fee_list = [1000, 1500, 2000, 2500, 3000, 5000, 6000, 7000, 8000, 9000, 10000]
+        dict_current = {}
+        dict_limit = {}
+        for fee in fee_list:
+            clinic_current_profit = self.calculator.calc_clinic_profit(current=True, cost=fee)
+            clinic_upper_profit =self.calculator.calc_clinic_profit(current=False, cost=fee)
+            dict_current[fee] = clinic_current_profit
+            dict_limit[fee] = clinic_upper_profit
+        df = pd.DataFrame({
+            '薄毛対策(現在)': pd.Series(dict_current),
+            '薄毛対策(上限)': pd.Series(dict_limit)
+        })
+        df.index.name = '価格'
+        df.plot(title='薄毛対策(現在)の価格による収益期待値', ylabel='収益期待値', xlabel='価格', figsize=(8, 5), kind='bar')
+        plt.show()
 
     # 介入によるage_compの変化を複数のシナリオとして構築：dict[str, pd.Series]
     def _var_age_comp(self, age_comp: pd.Series, x: float) -> pd.Series:
         result
 
-    def _plot_bar_chart(self, title: Optional[str], ylabel, transpose=False):
-        if title == '':
-            df = self.data.get_optional_profit_matrix
-        elif title == '':
-            df = self.data.get_service_satisfaction_matrix
-
-        if transpose:
-            df = df.T
-        ax = df.plot.bar(rot=0, figsize=(8, 5), title=title)
-        for container in ax.containers:
-            ax.bar_label(container, fmt='%.1f')
-        plt.ylabel(ylabel)
-        plt.tight_layout()
-        plt.show()
 
 
 class DataCalculator:
-    def __init__(self, data: DataContainer):
+    def __init__(self, data: DataContainer, customers: CustomerDist = None):
         self.data = data
         self.basic_profit_dict = data.get_basic_profit_dict()
+        if customers is None:
+            sex = data.sex
+            age_comp = data._get_normal_age_comp()
+            aga_rate = data._get_aga_rate()
+            self.customers = CustomerDist(sex, age_comp, aga_rate)
 
 ### 顧客一人当たりの年間期待利益→集客効果を考慮していない
     def calc_expected_basic_profit(
             self,
-            customers: CustomerDist
+            customers: Optional[CustomerDist] = None
     ) -> float:
         if customers is None:
-            raise ValueError('customers is None')
+            customers = self.customers
         age_comp = customers.age_comp
         aga_rate = customers.aga_rate
 
         basic_aga_profit = self.basic_profit_dict['aga']
+        print(f'basic_aga_profit{basic_aga_profit}')
+        print(type(basic_aga_profit))
         basic_normal_profit = self.basic_profit_dict['normal']
 
         expected_aga_basic_profit = basic_aga_profit.mul(age_comp).mul(aga_rate).sum()
         expected_normal_basic_profit = basic_normal_profit.mul(age_comp).mul((1-aga_rate)).sum()
-        return expected_aga_basic_profit + expected_normal_basic_profit
+        expected_basic_profit =  expected_aga_basic_profit + expected_normal_basic_profit
+        print(expected_basic_profit)
+        print(type(expected_basic_profit))
+        return expected_basic_profit
 
     def calc_expected_optional_profit(
             self,
-            customers: CustomerDist,
             optional_service: str,
-            cost: int = 0
+            cost: int = 0,
+            customers: Optional[CustomerDist] = None
     ) -> pd.Series:
         if customers is None:
-            raise ValueError('customers is None')
+            customers = self.customers
         age_comp = customers.age_comp
         aga_rate = customers.aga_rate
 
@@ -108,12 +120,27 @@ class DataCalculator:
         acceptance = self._get_cost_acceptance(label, data, cost)
 
         # ある価格に対する各年代の1人1回当たりのオプションサービスの期待収益
-        optional_profit_series = data.mul(acceptance, axis=1).sum(axis=0, skipna=True)
+        optional_profit_series = data.mul(acceptance, axis=1).sum(axis=1, skipna=True)
         # オプションサービスの期待収益
         optional_profit = optional_profit_series.mul(age_comp).mul(aga_rate).sum()
+        print(type(optional_profit))
         return optional_profit
     
-
+    # clinicの年間予想利益
+    def calc_clinic_profit(
+            self,
+            current: bool = True,
+            cost: int = 0,
+            customers: Optional[CustomerDist] = None
+    ) -> float:
+        if current == True:
+            clinic_profit = self.calc_expected_optional_profit('薄毛対策(現在)', cost, customers)
+        else:
+            clinic_profit = self.calc_expected_optional_profit('薄毛対策(上限)', cost, customers)
+        return clinic_profit
+        
+    
+### sub関数
     def _gen_labels(self, optional_service:str) -> str:
         if optional_service == 'パーマ':
             label = 'Q21S01_理美容院でかけてよい金額(自発ベース)_ボリュームアップパーマ_薄毛'
@@ -132,7 +159,7 @@ class DataCalculator:
         
         return label
     
-    def _get_cost_acceptance(self, label:List, data:pd.Series, cost:float) -> pd.Series:
+    def _get_cost_acceptance(self, label:List, data:pd.Series, cost:int) -> pd.Series:
         # labelごとの価格区分
         if label.startswith('Q21'):
             fee_list = [2000, 3000, 4000, 5000, 10000, 10000]
@@ -141,15 +168,19 @@ class DataCalculator:
         else:
             raise ValueError("label must start with 'Q21' or 'Q08'")
         
-        list = []
+        list = [0,0,0,0,0,0]
 ###ここから再開＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃＃
-        for i in range(len(list)):
+        for i in range(len(list)):  
             list[i] = fee_list[i] / cost
             if list[i] > 1:
                 list[i] = 1        
             list[i] = list[i] * fee_list[i]
 
-        print(list)
         expected_fee_series = pd.Series(list, index=data.columns).T
 
         return expected_fee_series
+    
+
+    def _get_customers_from_dist()
+
+    def _get_customers_dist()

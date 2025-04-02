@@ -9,22 +9,15 @@ plt.rcParams['font.family'] = 'Yu Gothic'
 file_path = 'data.xlsx'
 
 analyzer = data_apps.AGADataAnalyzer(file_path)
-analyzer.analyze_optional_profit()
+#analyzer.analyze_optional_profit()
+analyzer.analyze_clinic_profit()
 
 #analyzer.show_aga_rate()
 
 # ベース収益の期待値
-basic_profit = analyzer.calc_expected_basic_profit()
+basic_profit = analyzer.analyze_basic_profit()
 print(f"ベース収益の期待値: {basic_profit}")
 
-
-# optionサービスの収益期待値
-# optional itemの提示
-optional_items = ['パーマ', 'ヘッドスパ', '商品購入', '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
-optional_profit_dict = analyzer.calc_expected_optional_profit_dict()
-
-for item in optional_items:
-    print(f"{item}: {optional_profit_dict[item]}")
 
 
 

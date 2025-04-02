@@ -10,6 +10,26 @@ class DataInfo:
     name: str
     df: pd.DataFrame
 
+@dataclass
+class CustomerDist:
+    sex: str = 'male'
+    age_comp: pd.Series = None
+    aga_rate: pd.Series = None
+    age_num: pd.Series = None
+    aga_num: pd.Series = None
+    total: int = 100
+
+### 延べ人数と常連顧客の母数を調べる
+    def calc_fm_dist(self):
+        age_num = age_comp * freq_total
+        aga_num = age_num * aga_rate 
+        return
+
+    def calc_dict(self):
+        
+        return
+
+
 OptionalItem = Literal['パーマ', 'ヘッドスパ', '商品購入', '頭髪診断', '薄毛対策(現在)', '薄毛対策(上限)']
 OptinalSatisfaction = Literal['薄毛専門サロン', 'クリニック', 'パーマ', 'ヘッドスパ', '市販薬', '育毛エッセンス',
                       '薄毛対策シャンプー', 'セルフマッサージ', '機械マッサージ', 'サプリメント', '生活習慣']
@@ -76,7 +96,7 @@ class DataContainer:
 # ----------美容センサスからのデータ
     # 1回あたりの美容院利用費用のデータ追加：pd.Series
     def _get_ave_fee(self) -> pd.Series:
-        ave_fee = self.data['S02_1回あたり利用金額'].df.iloc[:5, 1:7] / 100  
+        ave_fee = self.data['S02_1回あたり利用金額'].df.iloc[:, 0]
         return ave_fee
     
     # 年齢階級別理美容院利用率(過去1年以内の利用を継続利用者と仮定しています)：pd.Series
@@ -103,6 +123,29 @@ class DataContainer:
         data['normal'] = datum_normal
         return data
 
+    # 通常の年齢階級別構成比の取得：pd.Series
+    def _get_normal_age_comp(self) -> pd.Series:
+        if self.sex == 'male':
+            data = {
+                '20代': 6082,
+                '30代': 6857,
+                '40代': 9067,
+                '50代': 8197,
+                '60代': 7624
+            }
+        elif self.sex == 'female':
+            data = {
+                '20代': 5775,
+                '30代': 6625,
+                '40代': 8801,
+                '50代': 8102,
+                '60代': 7955
+            }
+        else:
+            raise ValueError('sex is not true')
+        series = pd.Series(data)
+        series = series / series.sum()
+        return series
 
 #-----------顧客一人当たりの年間期待利益の算出のためのデータ
     # 1年間に各年代の一人の顧客が落とす散髪代金の期待値行列：Dict[pd.Series]
@@ -169,60 +212,3 @@ class DataContainer:
         selected_data = self.data[label].df['効果実感あり計']
         return selected_data
 
-
-# 顧客分布クラス
-class CustomerDist:
-    def __init__(
-            self,
-            age_comp: pd.Series = None,
-            aga_rate: pd.Series = None,
-            sex:str = 'male',
-            ):
-        self.sex = sex
-        self.age_comp = age_comp
-        self.aga_rate = aga_rate
-
-    def get_normal_dist(self, data:DataContainer) :
-        self._get_normal_age_comp()
-        self._get_aga_rate(data)
-        return self
-
-    def _get_normal_age_comp(self):
-        if self.sex == 'male':
-            data = {
-                '20代': 6082,
-                '30代': 6857,
-                '40代': 9067,
-                '50代': 8197,
-                '60代': 7624
-            }
-        elif self.sex == 'female':
-            data = {
-                '20代': 5775,
-                '30代': 6625,
-                '40代': 8801,
-                '50代': 8102,
-                '60代': 7955
-            }
-        else:
-            raise ValueError('sex is not true')
-        series = pd.Series(data)
-        series = series / series.sum()
-        self.age_comp = series
-        return
-    
-    def _get_aga_rate(self, data:DataContainer) -> pd.Series:
-        self.aga_rate = data._get_aga_rate
-        return
-    
-
-class EstimateCustomers:
-    def _init_(self, customers:CustomerDist) -> CustomerDist:
-        self.former_customers = customers
-    
-    def get_future_customers(self, current_customers:dict[str, pd.Series]) -> dict[str, pd.Series]:
-        return future_customers
-    
-    def get_potential_customers(self) -> dict[str, pd.Series]:
-        senario = []
-        # current_customers * = potential_customers
